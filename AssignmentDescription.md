@@ -27,7 +27,7 @@ The data is given in the `.tsv` format, means columns are separated by `\t` symb
 | translation | str   | Second item from the pair - paraphrased version of the reference |
 | trn_tox     | float | toxicity level of translation text                               |
 | similarity  | float | cosine similarity of the texts                                   |
-| lenght_diff | float | relative length difference between texts                         |
+| length_diff | float | relative length difference between texts                         |
 
 ## Evaluation criteria
 
