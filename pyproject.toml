@@ -1,0 +1,72 @@
+[tool.black]
+line-length = 90
+target-version = ['py310','py311']
+include = '\.pyi?$'
+exclude = '''
+/(
+  \.toml
+  |\.sh
+  |\.git
+  |\.ini
+  |Dockerfile
+)/
+'''
+
+[tool.ruff]
+fix=true
+# Same as Black
+line-length = 90
+# Assume Python 3.11
+target-version = "py311"
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+# Enable rules by default.
+select = [
+  "E", # pycodestyle (`E`)
+  "F", # pyflakes (`F`)
+  "I", # isort (`I`)
+  "ASYNC", # flake8-async (`ASYNC`)
+  "A", # flake8-builtins (`A`)
+  "C4", # flake8-comprehensions (C4)
+  "ISC", # flake8-implicit-str-concat (ISC)
+  "PIE", # flake8-pie (PIE)
+  # "T20", # flake8-print (T20)
+  "Q", # flake8-quotes (Q)
+  "RET", # flake8-return (RET)
+  "SIM", # flake8-simplify (SIM)
+  "ERA", # eradicate (ERA)
+  "PERF", # Perflint (PERF)
+  "RUF", # Ruff-specific rules (RUF)
+]
+ignore = [
+  "RUF012" # Mutable class attributes should be annotated with `typing.ClassVar`
+]
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
