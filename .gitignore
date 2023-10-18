@@ -1,3 +1,6 @@
 Pipfile.lock
 
 .ruff_cache
+
+data/interim/*
+data/raw/*
