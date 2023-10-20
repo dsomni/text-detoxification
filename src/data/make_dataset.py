@@ -5,6 +5,7 @@ import os
 import shutil
 from zipfile import ZipFile
 
+import pandas as pd
 import wget
 
 DATASET_URL = "https://github.com/skoltech-nlp/detox/releases/download/emnlp2021/filtered_paranmt.zip"
@@ -28,6 +29,9 @@ class Logger:
         """
         if self.verbose:
             print(message)
+
+
+""" Collect data functions """
 
 
 def clear_folder(path: str):
@@ -102,6 +106,85 @@ def unpack_dataset(zip_path: str, raw_path: str, logger: Logger):
     logger.log("Zip successfully extracted\n")
 
 
+def collect_data(dataset_url: str, interim_path: str, raw_path: str, logger: Logger):
+    """Collects dataset
+
+    Args:
+        dataset_url (str): url of dataset
+        interim_path (str): path of interim data
+        raw_path (str): path of raw data
+        logger (Logger): logger instance
+    """
+    logger.log("Start collecting data")
+    clear_all_data([interim_path, raw_path], logger)
+    zip_path = download_dataset_zip(dataset_url, interim_path, logger)
+    unpack_dataset(zip_path, raw_path, logger)
+    logger.log("Finish collecting data\n")
+
+
+""" Preprocess data functions """
+
+
+def remove_almost_same_data(
+    df: pd.DataFrame,
+    similarity_threshold: float = 0.94,
+    length_diff_threshold: float = 0.02,
+) -> pd.DataFrame:
+    return df[
+        (df["similarity"] < similarity_threshold)
+        & (df["lenght_diff"] > length_diff_threshold)
+    ]
+
+
+def extract_relevant_data(df: pd.DataFrame) -> pd.DataFrame:
+    relevant_data = df[df["ref_tox"] > df["trn_tox"]]
+    relevant_data = relevant_data[["reference", "translation"]]
+    return relevant_data.rename(columns={"reference": "toxic", "translation": "nontoxic"})
+
+
+def extract_irrelevant_data(df: pd.DataFrame) -> pd.DataFrame:
+    irrelevant_data = df[df["ref_tox"] <= df["trn_tox"]]
+    irrelevant_data = irrelevant_data[["reference", "translation"]]
+    return irrelevant_data.rename(
+        columns={"reference": "nontoxic", "translation": "toxic"}
+    )
+
+
+def build_dataset(df: pd.DataFrame, logger: Logger) -> pd.DataFrame:
+    logger.log("Cleaning dataset...")
+    clean_df = remove_almost_same_data(df)
+    logger.log("Extracting relevant data...")
+    relevant_data = extract_relevant_data(clean_df)
+    logger.log("Extracting irrelevant data...")
+    irrelevant_data = extract_irrelevant_data(clean_df)
+
+    return pd.concat([relevant_data, irrelevant_data])
+
+
+def load_dataset(path: str, **kwargs) -> pd.DataFrame:
+    return pd.read_csv(path, **kwargs)
+
+
+def save_dataset(df: pd.DataFrame, path: str, **kwargs) -> None:
+    df.to_csv(path, **kwargs)
+
+
+def preprocess_dataset(raw_dataset_path: str, save_path: str, logger: Logger):
+    """Collects dataset
+
+    Args:
+        raw_dataset_path (str): path of row dataset
+        save_path (str): path to save preprocessed dataset
+        logger (Logger): logger instance
+    """
+    logger.log("Start preprocessing data")
+    raw_df = load_dataset(raw_dataset_path, delimiter="\t")
+    preprocessed_df = build_dataset(raw_df, logger)
+    save_dataset(preprocessed_df, save_path, index=False)
+
+    logger.log("Finish preprocessing data\n")
+
+
 def make_dataset():
     """Make dataset"""
 
@@ -151,9 +234,16 @@ def make_dataset():
     logger = Logger(verbose)
 
     # Collecting data
-    clear_all_data([interim_path, raw_path], logger)
-    zip_path = download_dataset_zip(url, interim_path, logger)
-    unpack_dataset(zip_path, raw_path, logger)
+    collect_data(url, interim_path, raw_path, logger)
+
+    # Preprocess dataset
+    raw_filename = "filtered.tsv"
+    preprocessed_filename = "dataset.csv"
+    preprocess_dataset(
+        os.path.join(raw_path, raw_filename),
+        os.path.join(raw_path, preprocessed_filename),
+        logger,
+    )
 
     logger.log("Done!")
 
