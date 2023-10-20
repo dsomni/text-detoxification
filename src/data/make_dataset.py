@@ -130,6 +130,16 @@ def remove_almost_same_data(
     similarity_threshold: float = 0.94,
     length_diff_threshold: float = 0.02,
 ) -> pd.DataFrame:
+    """Remove data with high similarity
+
+    Args:
+        df (pd.DataFrame): initial dataset
+        similarity_threshold (float, optional): Defaults to 0.94.
+        length_diff_threshold (float, optional): Defaults to 0.02.
+
+    Returns:
+        pd.DataFrame: dataset with no similar data
+    """
     return df[
         (df["similarity"] < similarity_threshold)
         & (df["lenght_diff"] > length_diff_threshold)
@@ -137,12 +147,28 @@ def remove_almost_same_data(
 
 
 def extract_relevant_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Extract initially relevant data and rename columns
+
+    Args:
+        df (pd.DataFrame): initial dataset
+
+    Returns:
+        pd.DataFrame: dataset with 'toxic' and 'nontoxic' columns
+    """
     relevant_data = df[df["ref_tox"] > df["trn_tox"]]
     relevant_data = relevant_data[["reference", "translation"]]
     return relevant_data.rename(columns={"reference": "toxic", "translation": "nontoxic"})
 
 
 def extract_irrelevant_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Extract initially irrelevant data and rename columns
+
+    Args:
+        df (pd.DataFrame): initial dataset
+
+    Returns:
+        pd.DataFrame: dataset with swapped 'toxic' and 'nontoxic' columns
+    """
     irrelevant_data = df[df["ref_tox"] <= df["trn_tox"]]
     irrelevant_data = irrelevant_data[["reference", "translation"]]
     return irrelevant_data.rename(
@@ -151,6 +177,15 @@ def extract_irrelevant_data(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_dataset(df: pd.DataFrame, logger: Logger) -> pd.DataFrame:
+    """Create main dataset
+
+    Args:
+        df (pd.DataFrame): initial dataset
+        logger (Logger): logger instance
+
+    Returns:
+        pd.DataFrame: clean dataset with 'toxic' and 'nontoxic' columns
+    """
     logger.log("Cleaning dataset...")
     clean_df = remove_almost_same_data(df)
     logger.log("Extracting relevant data...")
@@ -162,10 +197,24 @@ def build_dataset(df: pd.DataFrame, logger: Logger) -> pd.DataFrame:
 
 
 def load_dataset(path: str, **kwargs) -> pd.DataFrame:
+    """Read csv or tsv file from disk
+
+    Args:
+        path (str)
+
+    Returns:
+        pd.DataFrame
+    """
     return pd.read_csv(path, **kwargs)
 
 
 def save_dataset(df: pd.DataFrame, path: str, **kwargs) -> None:
+    """Save dataset to disk
+
+    Args:
+        df (pd.DataFrame)
+        path (str)
+    """
     df.to_csv(path, **kwargs)
 
 
