@@ -86,6 +86,7 @@ sacrebleu = "*"
 evaluate = "*"
 ipywidgets = "*"
 accelerate = "*"
+huggingface-hub = "*"
 
 [dev-packages]
 ipykernel = "*"
