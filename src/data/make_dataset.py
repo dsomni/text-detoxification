@@ -156,7 +156,7 @@ def extract_relevant_data(df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: dataset with 'toxic' and 'nontoxic' columns
     """
     relevant_data = df[df["ref_tox"] > df["trn_tox"]]
-    relevant_data = relevant_data[["reference", "translation"]]
+    relevant_data = relevant_data[["reference", "translation", "ref_tox", "trn_tox"]]
     return relevant_data.rename(columns={"reference": "toxic", "translation": "nontoxic"})
 
 
@@ -170,13 +170,13 @@ def extract_irrelevant_data(df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: dataset with swapped 'toxic' and 'nontoxic' columns
     """
     irrelevant_data = df[df["ref_tox"] <= df["trn_tox"]]
-    irrelevant_data = irrelevant_data[["reference", "translation"]]
+    irrelevant_data = irrelevant_data[["reference", "translation", "ref_tox", "trn_tox"]]
     return irrelevant_data.rename(
         columns={"reference": "nontoxic", "translation": "toxic"}
     )
 
 
-def build_dataset(df: pd.DataFrame, logger: Logger) -> pd.DataFrame:
+def build_relevant_dataset(df: pd.DataFrame, logger: Logger) -> pd.DataFrame:
     """Create main dataset
 
     Args:
@@ -194,6 +194,64 @@ def build_dataset(df: pd.DataFrame, logger: Logger) -> pd.DataFrame:
     irrelevant_data = extract_irrelevant_data(clean_df)
 
     return pd.concat([relevant_data, irrelevant_data])
+
+
+def retain_useful_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Retain only "toxic" and "nontoxic" columns
+
+    Returns:
+        pd.DataFrame
+    """
+    return df[["toxic", "nontoxic"]]
+
+
+def retain_high_representative_data(
+    df: pd.DataFrame, toxicity_threshold: float = 0.9, no_toxicity_threshold: float = 0.05
+) -> pd.DataFrame:
+    """Retain only high representative data
+
+    Args:
+        df (pd.DataFrame): initial dataset
+        toxicity_threshold (float, optional): Defaults to 0.9.
+        no_toxicity_threshold (float, optional): Defaults to 0.05.
+
+    Returns:
+        pd.DataFrame: representative dataset
+    """
+    return retain_useful_columns(
+        df[
+            (df["ref_tox"] >= toxicity_threshold)
+            & (df["trn_tox"] <= no_toxicity_threshold)
+        ]
+    )
+
+
+def build_different_sizes(
+    df: pd.DataFrame, logger: Logger
+) -> list[tuple[str, pd.DataFrame]]:
+    """Build dataset of different sizes from initial
+
+    Args:
+        df (pd.DataFrame): initial dataset
+        logger (Logger): logger instance
+
+    Returns:
+        list[tuple[str, pd.DataFrame]]: List of (name, dataset) pairs
+    """
+    size_map = {
+        "": {"toxicity_threshold": 0, "no_toxicity_threshold": 1},
+        "lg": {"toxicity_threshold": 0.9, "no_toxicity_threshold": 0.1},
+        "md": {"toxicity_threshold": 0.99, "no_toxicity_threshold": 0.01},
+        "sm": {"toxicity_threshold": 0.999, "no_toxicity_threshold": 0.001},
+        "xs": {"toxicity_threshold": 0.9994, "no_toxicity_threshold": 0.0001},
+    }
+
+    datasets = []
+    for size, args in size_map.items():
+        name = f"dataset_{size}" if len(size) > 0 else "dataset"
+        datasets.append((name, retain_high_representative_data(df, **args)))
+        logger.log(f"Finish with '{name}'")
+    return datasets
 
 
 def load_dataset(path: str, **kwargs) -> pd.DataFrame:
@@ -223,15 +281,23 @@ def preprocess_dataset(raw_dataset_path: str, save_path: str, logger: Logger):
 
     Args:
         raw_dataset_path (str): path of row dataset
-        save_path (str): path to save preprocessed dataset
+        save_path (str): path to save preprocessed datasets
         logger (Logger): logger instance
     """
     logger.log("Start preprocessing data")
     raw_df = load_dataset(raw_dataset_path, delimiter="\t")
-    preprocessed_df = build_dataset(raw_df, logger)
-    save_dataset(preprocessed_df, save_path, index=False)
 
-    logger.log("Finish preprocessing data\n")
+    logger.log("\nBuilding relevant dataset")
+    rel_df = build_relevant_dataset(raw_df, logger)
+
+    logger.log("\nConstructing different datasets")
+    datasets = build_different_sizes(rel_df, logger)
+
+    logger.log("\nSaving datasets")
+    for name, dataset in datasets:
+        save_dataset(dataset, os.path.join(save_path, f"{name}.csv"), index=False)
+
+    logger.log("\nFinish preprocessing data\n")
 
 
 def make_dataset():
@@ -287,10 +353,10 @@ def make_dataset():
 
     # Preprocess dataset
     raw_filename = "filtered.tsv"
-    preprocessed_filename = "dataset.csv"
+
     preprocess_dataset(
         os.path.join(raw_path, raw_filename),
-        os.path.join(raw_path, preprocessed_filename),
+        raw_path,
         logger,
     )
 

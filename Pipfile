@@ -77,6 +77,15 @@ wget = "*"
 argparse = "*"
 pandas = "*"
 nltk = "*"
+torchdata = "*"
+spacy = "*"
+torchtext = "*"
+datasets = "*"
+transformers = {extras = ["sentencepiece"], version = "*"}
+sacrebleu = "*"
+evaluate = "*"
+ipywidgets = "*"
+accelerate = "*"
 
 [dev-packages]
 ipykernel = "*"
