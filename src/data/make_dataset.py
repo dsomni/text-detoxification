@@ -8,6 +8,8 @@ from zipfile import ZipFile
 import pandas as pd
 import wget
 
+MANUAL_SEED = 42
+
 DATASET_URL = "https://github.com/skoltech-nlp/detox/releases/download/emnlp2021/filtered_paranmt.zip"
 
 # Paths from root directory
@@ -205,8 +207,8 @@ def retain_useful_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df[["toxic", "nontoxic"]]
 
 
-def retain_high_representative_data(
-    df: pd.DataFrame, toxicity_threshold: float = 0.9, no_toxicity_threshold: float = 0.05
+def retain_representative_data(
+    df: pd.DataFrame, toxicity_threshold: float = 0.9, no_toxicity_threshold: float = 0.1
 ) -> pd.DataFrame:
     """Retain only high representative data
 
@@ -218,12 +220,9 @@ def retain_high_representative_data(
     Returns:
         pd.DataFrame: representative dataset
     """
-    return retain_useful_columns(
-        df[
-            (df["ref_tox"] >= toxicity_threshold)
-            & (df["trn_tox"] <= no_toxicity_threshold)
-        ]
-    )
+    return df[
+        (df["ref_tox"] >= toxicity_threshold) & (df["trn_tox"] <= no_toxicity_threshold)
+    ]
 
 
 def build_different_sizes(
@@ -239,7 +238,6 @@ def build_different_sizes(
         list[tuple[str, pd.DataFrame]]: List of (name, dataset) pairs
     """
     size_map = {
-        "": {"toxicity_threshold": 0, "no_toxicity_threshold": 1},
         "lg": {"toxicity_threshold": 0.9, "no_toxicity_threshold": 0.1},
         "md": {"toxicity_threshold": 0.99, "no_toxicity_threshold": 0.01},
         "sm": {"toxicity_threshold": 0.999, "no_toxicity_threshold": 0.001},
@@ -248,10 +246,33 @@ def build_different_sizes(
 
     datasets = []
     for size, args in size_map.items():
-        name = f"dataset_{size}" if len(size) > 0 else "dataset"
-        datasets.append((name, retain_high_representative_data(df, **args)))
+        name = f"dataset_{size}"
+        datasets.append((name, retain_representative_data(df, **args)))
         logger.log(f"Finish with '{name}'")
     return datasets
+
+
+def build_train_dataset(
+    df: pd.DataFrame, test_size: int
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Build test dataset from test_size
+
+    Args:
+        df (pd.DataFrame): initial dataset
+        test_size (int): size of test dataset
+
+    Returns:
+        tuple[pd.DataFrame, pd.DataFrame]: test dataset and
+        initial dataset without test data
+    """
+
+    frac = test_size / len(df)
+
+    test_df = df.sample(frac=frac, random_state=MANUAL_SEED)
+
+    rest_df = df.drop(test_df.index)
+
+    return test_df, rest_df
 
 
 def load_dataset(path: str, **kwargs) -> pd.DataFrame:
@@ -276,13 +297,19 @@ def save_dataset(df: pd.DataFrame, path: str, **kwargs) -> None:
     df.to_csv(path, **kwargs)
 
 
-def preprocess_dataset(raw_dataset_path: str, save_path: str, logger: Logger):
+def preprocess_dataset(
+    raw_dataset_path: str, test_size: int, logger: Logger
+) -> list[tuple[str, pd.DataFrame]]:
     """Collects dataset
 
     Args:
         raw_dataset_path (str): path of row dataset
-        save_path (str): path to save preprocessed datasets
+        test_size (int): size of test dataset
         logger (Logger): logger instance
+
+    Returns:
+        list[tuple[str, pd.DataFrame]]: preprocessed datasets
+        in the form (name, dataset)
     """
     logger.log("Start preprocessing data")
     raw_df = load_dataset(raw_dataset_path, delimiter="\t")
@@ -290,14 +317,19 @@ def preprocess_dataset(raw_dataset_path: str, save_path: str, logger: Logger):
     logger.log("\nBuilding relevant dataset")
     rel_df = build_relevant_dataset(raw_df, logger)
 
-    logger.log("\nConstructing different datasets")
-    datasets = build_different_sizes(rel_df, logger)
+    logger.log("\nBuilding representative dataset")
+    rep_df = retain_representative_data(rel_df)
 
-    logger.log("\nSaving datasets")
-    for name, dataset in datasets:
-        save_dataset(dataset, os.path.join(save_path, f"{name}.csv"), index=False)
+    logger.log("\nBuilding test dataset")
+    test_df, rest_df = build_train_dataset(rep_df, test_size)
+
+    datasets: list[tuple[str, pd.DataFrame]] = [("test", test_df)]
+
+    logger.log("\nConstructing different datasets")
+    datasets.extend(build_different_sizes(rest_df, logger))
 
     logger.log("\nFinish preprocessing data\n")
+    return [(name, retain_useful_columns(df)) for (name, df) in datasets]
 
 
 def make_dataset():
@@ -330,6 +362,14 @@ def make_dataset():
         help="url to download data from",
     )
     parser.add_argument(
+        "-t",
+        "--test-size",
+        type=int,
+        dest="test_size",
+        default=500,
+        help="size of test dataset (default: 500)",
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         default=True,
@@ -337,7 +377,8 @@ def make_dataset():
         help="print information (default: True)",
     )
     namespace = parser.parse_args()
-    url, interim_path, raw_path, verbose = (
+    test_size, url, interim_path, raw_path, verbose = (
+        namespace.test_size,
         namespace.url,
         namespace.interim,
         namespace.raw,
@@ -353,12 +394,11 @@ def make_dataset():
 
     # Preprocess dataset
     raw_filename = "filtered.tsv"
+    datasets = preprocess_dataset(os.path.join(raw_path, raw_filename), test_size, logger)
 
-    preprocess_dataset(
-        os.path.join(raw_path, raw_filename),
-        raw_path,
-        logger,
-    )
+    logger.log("Saving datasets...\n")
+    for name, dataset in datasets:
+        save_dataset(dataset, os.path.join(raw_path, f"{name}.csv"), index=False)
 
     logger.log("Done!")
 
