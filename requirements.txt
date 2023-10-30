@@ -63,7 +63,6 @@ pickleshare==0.7.5
 Pillow==10.0.1
 platformdirs==3.11.0
 portalocker==2.8.2
-pre-commit==3.5.0
 preshed==3.0.9
 prompt-toolkit==3.0.39
 protobuf==4.24.4

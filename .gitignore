@@ -7,5 +7,4 @@ data/raw/*
 
 models/train_data/*
 
-# TODO: Decide how to push model to github
 models/bart/*

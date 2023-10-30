@@ -19,7 +19,7 @@ verify_ssl = true
 name = "downloadpytorch"
 
 [packages]
-ruff = "==0.0.292"
+ruff = "*"
 black = "==23.9.1"
 asttokens = "==2.4.0"
 backcall = "==0.2.0"
