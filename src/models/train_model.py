@@ -158,7 +158,7 @@ class DetoxTransformer(nn.Module):
         )
 
 
-### CustomTransformer Trainer Classes
+### Trainer Classes
 
 
 class CustomTransformerTrainer:
@@ -401,7 +401,6 @@ class CustomTransformerTrainer:
 
     def train_and_save(self) -> None:
         """Train and save Custom Transformer model"""
-        self.logger.log("Splitting data...")
 
         self.logger.log("Loading tokenizer...")
         self.tokenizer = get_tokenizer("spacy", language="en_core_web_sm")
@@ -540,7 +539,7 @@ class BartTrainer:
         self.bleu_metric = evaluate.load("bleu")
 
     def train_and_save(self) -> None:
-        """Train and save Custom Transformer model"""
+        """Train and save Bart model"""
         self.logger.log("Splitting data...")
         train_seq, val_seq = random_split(
             range(len(self.train_df)),  # type: ignore
