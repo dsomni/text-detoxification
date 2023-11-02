@@ -145,8 +145,20 @@ class DetoxTransformer(nn.Module):
         )
         return self.generator(outs)
 
+    def encode(self, src: Tensor, src_mask: Tensor):
+        """Encode data using learned embeddings"""
+        return self.transformer.encoder(
+            self.positional_encoding(self.input_embeddings(src)), src_mask
+        )
 
-### Classes for CustomTransformer Network
+    def decode(self, trg: Tensor, memory: Tensor, trg_mask: Tensor):
+        """Decode data using learned embeddings"""
+        return self.transformer.decoder(
+            self.positional_encoding(self.output_embeddings(trg)), memory, trg_mask
+        )
+
+
+### CustomTransformer Trainer Classes
 
 
 class CustomTransformerTrainer:
@@ -256,7 +268,7 @@ class CustomTransformerTrainer:
         train_loss = 0.0
         total = 0
 
-        if not self.logger.verbose:
+        if self.logger.verbose:
             loop = tqdm(
                 loader,
                 total=len(loader),
@@ -302,7 +314,7 @@ class CustomTransformerTrainer:
             optimizer.step()
 
             train_loss += loss.item()
-            if not self.logger.verbose:
+            if self.logger.verbose:
                 loop.set_postfix({"loss": train_loss / total})
 
     def _val_one_epoch(
@@ -312,7 +324,7 @@ class CustomTransformerTrainer:
         loss_fn,
         epoch,
     ) -> float:
-        if not self.logger.verbose:
+        if self.logger.verbose:
             loop = tqdm(
                 loader,
                 total=len(loader),
@@ -358,7 +370,8 @@ class CustomTransformerTrainer:
                 )
 
                 val_loss += loss.item()
-                loop.set_postfix({"loss": val_loss / total})
+                if self.logger.verbose:
+                    loop.set_postfix({"loss": val_loss / total})
         return val_loss / total
 
     def __init__(
@@ -449,6 +462,11 @@ class CustomTransformerTrainer:
             val_loss = self._val_one_epoch(model, val_dataloader, loss_fn, epoch)
             if val_loss <= best_loss:
                 val_loss = best_loss
+
+        self.logger.log("Saving vocab...")
+        torch.save(
+            dataset.vocab, os.path.join(self.save_path, "custom_transformer_vocab.pth")
+        )
 
         self.logger.log("Saving model...")
         torch.save(best, os.path.join(self.save_path, "custom_transformer"))
@@ -552,7 +570,7 @@ class BartTrainer:
 
         self.logger.log("Building trainer...")
         training_args = Seq2SeqTrainingArguments(
-            output_dir="../models/train_data/bart",
+            output_dir=os.path.join(self.save_path, "train_data", "bart"),
             evaluation_strategy="epoch",
             learning_rate=1e-4,
             per_device_train_batch_size=self.batch_size,
@@ -562,6 +580,7 @@ class BartTrainer:
             num_train_epochs=self.epochs,
             predict_with_generate=True,
             report_to=None,
+            use_cpu=not self.cuda,
         )
         trainer = Seq2SeqTrainer(
             model=model,
@@ -591,7 +610,7 @@ def construct_absolute_path(*relative_path: str) -> str:
     Returns:
         str: absolute path
     """
-    absolute_path = os.path.join(".", *relative_path)
+    absolute_path = os.path.abspath(os.path.join(*relative_path))
     if not os.path.exists(absolute_path):
         raise FileNotFoundError(f"Path {absolute_path} does not exist")
     return absolute_path
@@ -641,7 +660,7 @@ def train_model():
         "--save-path",
         type=str,
         dest="save_path",
-        default="models",
+        default="./models",
         help="relative path to save trained model (default: ./models)",
     )
     parser.add_argument(
@@ -649,7 +668,7 @@ def train_model():
         "--load-path",
         type=str,
         dest="load_path",
-        default="data/raw",
+        default="./data/raw",
         help="relative path to load data from (default: ./data/raw)",
     )
     parser.add_argument(
