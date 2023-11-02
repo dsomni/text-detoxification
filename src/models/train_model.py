@@ -616,8 +616,8 @@ def construct_absolute_path(*relative_path: str) -> str:
     return absolute_path
 
 
-def load_test_data(train_path: str, logger: Logger) -> pd.DataFrame:
-    """Load test data from disk
+def load_train_data(train_path: str, logger: Logger) -> pd.DataFrame:
+    """Load train data from disk
 
     Args:
         train_path (str): path of training dataset
@@ -746,7 +746,7 @@ def train_model():
     # Load datasets
     load_train_path = construct_absolute_path(load_path, f"dataset_{dataset_size}.csv")
 
-    train_df = load_test_data(load_train_path, logger)
+    train_df = load_train_data(load_train_path, logger)
 
     # Train and save model
     if model == "bart":
