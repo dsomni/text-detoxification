@@ -270,6 +270,28 @@ class CustomTransformerTester:
             os.path.join(self.save_path, "custom_transformer.csv"), index=False
         )
 
+    def predict_interactive(self) -> None:
+        """Predict interactively using Custom Transformer model"""
+
+        self.logger.log("Loading vocab...")
+        vocab = torch.load(os.path.join(self.load_path, "custom_transformer_vocab.pth"))
+
+        self.logger.log(f"Loading model...\nPath: {self.load_path}")
+        model = torch.load(os.path.join(self.load_path, "custom_transformer"))
+        model = model.to(self.device)
+        model.eval()
+
+        self.logger.log("Loading tokenizer...")
+        tokenizer = get_tokenizer("spacy", language="en_core_web_sm")
+        self.bos_idx, self.eos_idx, self.pad_idx = vocab(["<bos>", "<eos>", "<pad>"])
+
+        print("Interactive session started. Use ':quit' for exit.")
+        user_prompt = input("> ").strip()
+        while user_prompt != ":quit":
+            print("Model 'thinking'...")
+            print(self._detoxify(model, user_prompt, vocab, tokenizer))
+            user_prompt = input("> ").strip()
+
 
 class BartTester:
     """Tester class for fine-tunned BART for Text Detoxification task"""
@@ -327,6 +349,22 @@ class BartTester:
 
         self.logger.log(f"Saving results...\nPath: {self.save_path}")
         self.test_df.to_csv(os.path.join(self.save_path, "bart.csv"), index=False)
+
+    def predict_interactive(self) -> None:
+        """Predict interactively using Bart model"""
+        self.logger.log(f"Loading model...\nPath: {self.load_path}")
+        tokenizer = AutoTokenizer.from_pretrained(self.load_path)
+        model = AutoModelForSeq2SeqLM.from_pretrained(self.load_path)
+        model = model.to(self.device)
+        model.eval()
+        model.config.use_cache = False
+
+        print("Interactive session started. Use ':quit' for exit.")
+        user_prompt = input("> ").strip()
+        while user_prompt != ":quit":
+            print("Model 'thinking'...")
+            print(self._detoxify(model, tokenizer, user_prompt))
+            user_prompt = input("> ").strip()
 
 
 def construct_absolute_path(*relative_path: str) -> str:
@@ -409,6 +447,14 @@ def predict_model():
     )
     parser.add_argument(
         "-i",
+        "--interactive",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="in interactive mode user can interact \
+            with model in real time (default: False)",
+    )
+    parser.add_argument(
+        "-w",
         "--ignore-warnings",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -429,6 +475,7 @@ def predict_model():
         data_load_path,
         load_path,
         cuda,
+        interactive,
         ignore_warnings,
         verbose,
     ) = (
@@ -437,6 +484,7 @@ def predict_model():
         namespace.data_load_path,
         namespace.load_path,
         namespace.cuda,
+        namespace.interactive,
         namespace.ignore_warnings,
         namespace.verbose,
     )
@@ -447,15 +495,18 @@ def predict_model():
     if ignore_warnings:
         warnings.filterwarnings("ignore")
 
-    save_path = construct_absolute_path(save_path)
+    if not interactive:
+        save_path = construct_absolute_path(save_path)
 
     # Set up logger
     logger = Logger(verbose)
 
     # Load datasets
-    load_test_path = construct_absolute_path(data_load_path)
-
-    test_df = load_test_data(load_test_path, logger)
+    if not interactive:
+        load_test_path = construct_absolute_path(data_load_path)
+        test_df = load_test_data(load_test_path, logger)
+    else:
+        test_df = pd.DataFrame()
 
     if model != "bart" or load_path != HUB_LOAD_FLAG:
         load_path = construct_absolute_path(load_path)
@@ -466,7 +517,12 @@ def predict_model():
     else:  # elif model == "custom_transformer"
         tester = CustomTransformerTester(test_df, load_path, cuda, save_path, logger)
 
-    tester.predict_and_save()
+    if interactive:
+        logger.log("Chosen mode: INTERACTIVE")
+        tester.predict_interactive()
+    else:
+        logger.log("Chosen mode: BASIC")
+        tester.predict_and_save()
 
     logger.log("Done!")
 
