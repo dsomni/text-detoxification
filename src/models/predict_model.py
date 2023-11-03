@@ -1,12 +1,16 @@
 """ Module contains functions for training models """
 
 import argparse
+import math
 import os
 import re
 import warnings
 
 import pandas as pd
 import torch
+import torch.nn as nn
+from torch import Tensor
+from torch.nn import Transformer
 from torchtext.data.utils import get_tokenizer
 from tqdm import tqdm
 from transformers import (
@@ -35,6 +39,113 @@ class Logger:
         """
         if self.verbose:
             print(message)
+
+
+### Classes for CustomTransformer Network
+
+
+class PositionalEncoding(nn.Module):
+    """Add positional encoding"""
+
+    def __init__(self, embedding_size: int, dropout: float, max_size: int):
+        super(PositionalEncoding, self).__init__()
+        den = torch.exp(
+            -torch.arange(0, embedding_size, 2) * math.log(10000) / embedding_size
+        )
+        pos = torch.arange(0, max_size).reshape(max_size, 1)
+        pos_embedding = torch.zeros((max_size, embedding_size))
+        pos_embedding[:, 0::2] = torch.sin(pos * den)
+        pos_embedding[:, 1::2] = torch.cos(pos * den)
+        pos_embedding = pos_embedding.unsqueeze(-2)
+
+        self.dropout = nn.Dropout(dropout)
+        self.register_buffer("pos_embedding", pos_embedding)
+
+    def forward(self, token_embedding: Tensor):
+        """Make forward pass"""
+        return self.dropout(
+            token_embedding + self.pos_embedding[: token_embedding.size(0), :]
+        )
+
+
+class TokenEmbedding(nn.Module):
+    """Learn embedding"""
+
+    def __init__(self, vocab_size: int, embedding_size: int):
+        super(TokenEmbedding, self).__init__()
+        self.embedding = nn.Embedding(vocab_size, embedding_size)
+        self.embedding_size = embedding_size
+
+    def forward(self, tokens: Tensor):
+        """Make forward pass"""
+        return self.embedding(tokens.long()) * math.sqrt(self.embedding_size)
+
+
+class DetoxTransformer(nn.Module):
+    def __init__(
+        self,
+        num_encoder_layers: int,
+        num_decoder_layers: int,
+        embedding_size: int,
+        num_heads: int,
+        vocab_size: int,
+        feedforward_dim: int,
+        max_size: int,
+        dropout: float = 0.1,
+    ):
+        super(DetoxTransformer, self).__init__()
+        self.positional_encoding = PositionalEncoding(
+            embedding_size, dropout=dropout, max_size=max_size
+        )
+        self.input_embeddings = TokenEmbedding(vocab_size, embedding_size)
+        self.output_embeddings = TokenEmbedding(vocab_size, embedding_size)
+        self.transformer = Transformer(
+            d_model=embedding_size,
+            nhead=num_heads,
+            num_encoder_layers=num_encoder_layers,
+            num_decoder_layers=num_decoder_layers,
+            dim_feedforward=feedforward_dim,
+            dropout=dropout,
+        )
+        self.generator = nn.Linear(embedding_size, vocab_size)
+
+    def forward(
+        self,
+        src: Tensor,
+        trg: Tensor,
+        src_mask: Tensor,
+        trg_mask: Tensor,
+        src_padding_mask: Tensor,
+        trg_padding_mask: Tensor,
+        memory_key_padding_mask: Tensor,
+    ):
+        """Make forward pass"""
+
+        src_embeddings = self.positional_encoding(self.input_embeddings(src))
+        trg_embeddings = self.positional_encoding(self.output_embeddings(trg))
+        outs = self.transformer(
+            src_embeddings,
+            trg_embeddings,
+            src_mask,
+            trg_mask,
+            None,
+            src_padding_mask,
+            trg_padding_mask,
+            memory_key_padding_mask,
+        )
+        return self.generator(outs)
+
+    def encode(self, src: Tensor, src_mask: Tensor):
+        """Encode data using learned embeddings"""
+        return self.transformer.encoder(
+            self.positional_encoding(self.input_embeddings(src)), src_mask
+        )
+
+    def decode(self, trg: Tensor, memory: Tensor, trg_mask: Tensor):
+        """Decode data using learned embeddings"""
+        return self.transformer.decoder(
+            self.positional_encoding(self.output_embeddings(trg)), memory, trg_mask
+        )
 
 
 ### Tester Classes
@@ -137,6 +248,7 @@ class CustomTransformerTester:
 
         self.logger.log(f"Loading model...\nPath: {self.load_path}")
         model = torch.load(os.path.join(self.load_path, "custom_transformer"))
+        model = model.to(self.device)
         model.eval()
 
         self.logger.log("Loading tokenizer...")
@@ -154,7 +266,9 @@ class CustomTransformerTester:
         self.test_df["generated"] = model_answers
 
         self.logger.log(f"Saving results...\nPath: {self.save_path}")
-        self.test_df.to_csv(os.path.join(self.save_path, "bart.csv"), index=False)
+        self.test_df.to_csv(
+            os.path.join(self.save_path, "custom_transformer.csv"), index=False
+        )
 
 
 class BartTester:
@@ -181,8 +295,13 @@ class BartTester:
         self.logger = logger
 
         # Constants for the training process
+        self.device = torch.device(
+            "cuda" if self.cuda and torch.cuda.is_available() else "cpu"
+        )
         if self.load_path == HUB_LOAD_FLAG:
             self.load_path = "dsomni/pmldl1-bart"
+        else:
+            self.load_path = os.path.join(self.load_path, "bart")
 
         self.prefix = "paraphrase following to be nontoxic: \n"
 
@@ -192,6 +311,7 @@ class BartTester:
         self.logger.log(f"Loading model...\nPath: {self.load_path}")
         tokenizer = AutoTokenizer.from_pretrained(self.load_path)
         model = AutoModelForSeq2SeqLM.from_pretrained(self.load_path)
+        model = model.to(self.device)
         model.eval()
         model.config.use_cache = False
 
