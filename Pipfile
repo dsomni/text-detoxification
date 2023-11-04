@@ -87,6 +87,9 @@ evaluate = "*"
 ipywidgets = "*"
 accelerate = "*"
 huggingface-hub = "*"
+rouge-score = "*"
+jiwer = "*"
+matplotlib = "*"
 
 [dev-packages]
 ipykernel = "*"
