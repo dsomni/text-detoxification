@@ -3,7 +3,7 @@ Pipfile.lock
 .ruff_cache
 
 data/interim/*
-data/raw/*
+data/raw/filtered.tsv
 
 models/train_data/*
 models/bart/*

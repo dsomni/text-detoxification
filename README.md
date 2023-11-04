@@ -40,7 +40,6 @@ I also highly recommend to read reports in corresponding `reports` folder to ful
 |       ├── dataset_md.csv
 |       ├── dataset_sm.csv
 |       ├── dataset_xs.csv
-|       ├── filtered.tsv
 |       └── test.csv
 │
 ├── models          # Trained and serialized models, final checkpoints
