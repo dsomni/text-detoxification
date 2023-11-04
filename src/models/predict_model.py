@@ -22,7 +22,7 @@ AVAILABLE_MODELS = ["bart", "custom_transformer"]
 HUB_LOAD_FLAG = "HUB"
 
 
-### Classes for CustomTransformer Network
+### Class for Logger instance
 
 
 class Logger:
@@ -399,10 +399,10 @@ def load_test_data(test_path: str, logger: Logger) -> pd.DataFrame:
 
 
 def predict_model():
-    """Train and save model"""
+    """Predict model"""
 
     # Parse arguments
-    parser = argparse.ArgumentParser(description="Train and save model")
+    parser = argparse.ArgumentParser(description="Predict using model")
     parser.add_argument(
         "-m",
         "--model",
